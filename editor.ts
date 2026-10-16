@@ -92,10 +92,10 @@ function computeRescanTarget(update: ViewUpdate): RescanTarget | null {
         const startLine = startState.doc.lineAt(fromA).number;
         const endLine = startState.doc.lineAt(Math.min(toA, startState.doc.length)).number;
         if (startLine < minLine) minLine = startLine;
-        if (endLine < maxLine) maxLine = endLine;
+        if (endLine > maxLine) maxLine = endLine;
     });
 
-    if (!Number.isFinite(minLine)) {
+    if (!Number.isFinite(minLine) || !Number.isFinite(maxLine)) {
         return { from: 0, to: 0, full: true };
     }
 
@@ -206,6 +206,10 @@ export function createInrefensEditorPlugin() {
                 if (this.debounceTimer !== null) {
                     window.clearTimeout(this.debounceTimer);
                     this.debounceTimer = null;
+                }
+                if (this.viewportTimer !== null) {
+                    window.clearTimeout(this.viewportTimer);
+                    this.viewportTimer = null;
                 }
             }
         },

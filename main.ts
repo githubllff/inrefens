@@ -34,6 +34,10 @@ export default class InrefensPlugin extends Plugin {
         this.refreshEditorDecorations();
     }
 
+    refreshReadingViewLinksForSettings(): void {
+        this.refreshReadingViewLinks();
+    }
+
     private refreshEditorDecorations(): void {
         requestInrefensFullRescan();
         this.app.workspace.iterateAllLeaves(leaf => {
