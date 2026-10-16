@@ -76,6 +76,7 @@ export interface InrefensSettings {
     linkColor: string;
     autoLink: boolean;
     openInJWLibrary: boolean;
+    docidCache: Record<string, string>;
 }
 
 export const DEFAULT_SETTINGS: InrefensSettings = {
@@ -83,4 +84,5 @@ export const DEFAULT_SETTINGS: InrefensSettings = {
     linkColor: '',
     autoLink: true,
     openInJWLibrary: false,
+    docidCache: {},
 };

@@ -1,7 +1,7 @@
 // post-processor.ts
 
 import { findCitations, buildDelimitedUrl, getDelimitedQuery } from './engine-wrapper';
-import { getReferenceUrl } from './linkOpener';
+import { openReferenceAsync } from './linkOpener';
 import { Citation } from './types';
 
 export function processElement(el: HTMLElement): void {
@@ -20,6 +20,22 @@ function isInsideAnchor(node: Node): boolean {
         : node.parentElement;
     return !!el?.closest('a');
 }
+
+function attachJwLibraryClickHandler(
+    anchor: HTMLAnchorElement,
+    wolUrl: string,
+    query: string,
+): void {
+    anchor.addEventListener('click', (event) => {
+        if (!isOpenInJWLibraryEnabled()) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        void openReferenceAsync(wolUrl, query);
+    });
+}
+
+import { isOpenInJWLibraryEnabled } from './linkOpener';
 
 // ──────────────────────────────────────────────
 // Delimited citations (*** ... ***)
@@ -41,14 +57,14 @@ function handleDelimitedElements(el: HTMLElement): void {
         const wolUrl = buildDelimitedUrl(text);
         if (!wolUrl) continue;
         const query = getDelimitedQuery(text);
-        const url = getReferenceUrl(wolUrl, query);
 
         const anchor = createEl('a');
         anchor.className = 'inrefens-link';
-        anchor.href = url;
+        anchor.href = wolUrl;
         anchor.target = '_blank';
         anchor.rel = 'noopener noreferrer';
         anchor.setAttribute('data-inrefens-query', query);
+        attachJwLibraryClickHandler(anchor, wolUrl, query);
 
         while (em.firstChild) {
             anchor.appendChild(em.firstChild);
@@ -131,7 +147,13 @@ function flattenRun(run: RunChild[]): string {
     return out;
 }
 
-function replaceRunRange(run: RunChild[], from: number, to: number, url: string, query: string): void {
+function replaceRunRange(
+    run: RunChild[],
+    from: number,
+    to: number,
+    wolUrl: string,
+    query: string,
+): void {
     const first = run[0];
     const parent = first.node.parentNode;
     if (!parent) return;
@@ -151,10 +173,11 @@ function replaceRunRange(run: RunChild[], from: number, to: number, url: string,
 
     const anchor = createEl('a');
     anchor.className = 'inrefens-link';
-    anchor.href = url;
+    anchor.href = wolUrl;
     anchor.target = '_blank';
     anchor.rel = 'noopener noreferrer';
     anchor.setAttribute('data-inrefens-query', query);
+    attachJwLibraryClickHandler(anchor, wolUrl, query);
 
     for (const rc of run) {
         const rcEnd = rc.start + rc.text.length;
@@ -254,13 +277,12 @@ function processBlockElement(block: HTMLElement): void {
         for (const c of sorted) {
             if (c.end <= c.start) continue;
             if (!c.wol_url) continue;
-            const query = c.parts?.query || '';
             replaceRunRange(
                 run.children,
                 c.start,
                 c.end,
-                getReferenceUrl(c.wol_url, query),
-                query,
+                c.wol_url,
+                c.parts?.query || '',
             );
         }
 
@@ -316,13 +338,14 @@ function replaceTextNode(textNode: Text, text: string, citations: Citation[]): v
         const query = citation.parts?.query || '';
         const anchor = createEl('a');
         anchor.className = 'inrefens-link';
-        anchor.href = getReferenceUrl(citation.wol_url, query);
+        anchor.href = citation.wol_url;
         anchor.target = '_blank';
         anchor.rel = 'noopener noreferrer';
         anchor.textContent = citation.text;
         if (query) {
             anchor.setAttribute('data-inrefens-query', query);
         }
+        attachJwLibraryClickHandler(anchor, citation.wol_url, query);
         fragment.appendChild(anchor);
         pos = citation.end;
     }

@@ -1,6 +1,6 @@
 // linkOpener.ts
 
-import { buildJwLibraryFinderUrlForReference } from './jwLibraryLink';
+import { buildJwOrgFinderUrl, lookupDocid } from './docidLookup';
 
 let openInJWLibrary = false;
 
@@ -13,13 +13,24 @@ export function isOpenInJWLibraryEnabled(): boolean {
 }
 
 export function getReferenceUrl(wolUrl: string, query: string): string {
-    const trimmedQuery = (query || '').trim();
+    // The anchor href remains WOL. When JW Library mode is enabled, the
+    // click handlers resolve a docid asynchronously and open the JW.org
+    // finder share URL instead.
+    return wolUrl;
+}
 
-    if (openInJWLibrary && trimmedQuery) {
-        return buildJwLibraryFinderUrlForReference({
-            extra: { query: trimmedQuery },
-        });
+export async function openReferenceAsync(
+    wolUrl: string,
+    query: string,
+): Promise<void> {
+    if (openInJWLibrary && query.trim()) {
+        const docid = await lookupDocid(query);
+
+        if (docid) {
+            window.open(buildJwOrgFinderUrl(docid), '_blank');
+            return;
+        }
     }
 
-    return wolUrl;
+    window.open(wolUrl, '_blank');
 }

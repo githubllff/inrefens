@@ -3,7 +3,7 @@
 import { ViewPlugin, EditorView, Decoration, DecorationSet, ViewUpdate } from '@codemirror/view';
 import { RangeSetBuilder } from '@codemirror/state';
 import { findCitations, buildWolUrl } from './engine-wrapper';
-import { getReferenceUrl } from './linkOpener';
+import { openReferenceAsync } from './linkOpener';
 
 const SMALL_CHANGE_MAX_CHARS = 64;
 const SMALL_CHANGE_MAX_LINES = 5;
@@ -227,7 +227,7 @@ export function createInrefensEditorPlugin() {
                     if (!wolUrl) return;
                     e.preventDefault();
                     e.stopPropagation();
-                    window.open(getReferenceUrl(wolUrl, query), '_blank');
+                    void openReferenceAsync(wolUrl, query);
                 },
             },
         }
