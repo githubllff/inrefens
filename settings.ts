@@ -87,6 +87,21 @@ export class InrefensSettingTab extends PluginSettingTab {
                         },
                     },
                     {
+                        name: 'Open references in JW Library',
+                        desc: 'When enabled, clicking a detected reference attempts to open it in JW Library using its finder deep link. Turn this off to open the WOL search page instead.',
+                        render: (setting) => {
+                            setting.addToggle(toggle => {
+                                toggle
+                                    .setValue(this.plugin.settings.openInJWLibrary)
+                                    .onChange(async (value) => {
+                                        this.plugin.settings.openInJWLibrary = value;
+                                        await this.plugin.saveSettings();
+                                        this.plugin.refreshReadingViewLinksForSettings();
+                                    });
+                            });
+                        },
+                    },
+                    {
                         name: 'Link color',
                         desc: 'Color for citation links. "Theme default" uses the vault\u2019s external-link color. Changing this requires restarting Obsidian.',
                         render: (setting) => {

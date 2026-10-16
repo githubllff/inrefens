@@ -3,6 +3,7 @@
 import { ViewPlugin, EditorView, Decoration, DecorationSet, ViewUpdate } from '@codemirror/view';
 import { RangeSetBuilder } from '@codemirror/state';
 import { findCitations, buildWolUrl } from './engine-wrapper';
+import { getReferenceUrl } from './linkOpener';
 
 const SMALL_CHANGE_MAX_CHARS = 64;
 const SMALL_CHANGE_MAX_LINES = 5;
@@ -91,10 +92,10 @@ function computeRescanTarget(update: ViewUpdate): RescanTarget | null {
         const startLine = startState.doc.lineAt(fromA).number;
         const endLine = startState.doc.lineAt(Math.min(toA, startState.doc.length)).number;
         if (startLine < minLine) minLine = startLine;
-        if (endLine > maxLine) maxLine = endLine;
+        if (endLine < maxLine) maxLine = endLine;
     });
 
-    if (!Number.isFinite(minLine) || !Number.isFinite(maxLine)) {
+    if (!Number.isFinite(minLine)) {
         return { from: 0, to: 0, full: true };
     }
 
@@ -206,10 +207,6 @@ export function createInrefensEditorPlugin() {
                     window.clearTimeout(this.debounceTimer);
                     this.debounceTimer = null;
                 }
-                if (this.viewportTimer !== null) {
-                    window.clearTimeout(this.viewportTimer);
-                    this.viewportTimer = null;
-                }
             }
         },
         {
@@ -222,11 +219,11 @@ export function createInrefensEditorPlugin() {
                     if (!linkEl) return;
                     const query = linkEl.getAttribute('data-inrefens-query');
                     if (!query) return;
-                    const url = buildWolUrl(query);
-                    if (!url) return;
+                    const wolUrl = buildWolUrl(query);
+                    if (!wolUrl) return;
                     e.preventDefault();
                     e.stopPropagation();
-                    window.open(url, '_blank');
+                    window.open(getReferenceUrl(wolUrl, query), '_blank');
                 },
             },
         }

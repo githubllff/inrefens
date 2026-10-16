@@ -75,10 +75,12 @@ export interface InrefensSettings {
     language: string;
     linkColor: string;
     autoLink: boolean;
+    openInJWLibrary: boolean;
 }
 
 export const DEFAULT_SETTINGS: InrefensSettings = {
     language: 'en',
     linkColor: '',
     autoLink: true,
+    openInJWLibrary: false,
 };

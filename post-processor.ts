@@ -1,6 +1,7 @@
 // post-processor.ts
 
 import { findCitations, buildDelimitedUrl, getDelimitedQuery } from './engine-wrapper';
+import { getReferenceUrl } from './linkOpener';
 import { Citation } from './types';
 
 export function processElement(el: HTMLElement): void {
@@ -37,9 +38,10 @@ function handleDelimitedElements(el: HTMLElement): void {
     for (const em of candidates) {
         const text = em.textContent || '';
         if (!text) continue;
-        const url = buildDelimitedUrl(text);
-        if (!url) continue;
+        const wolUrl = buildDelimitedUrl(text);
+        if (!wolUrl) continue;
         const query = getDelimitedQuery(text);
+        const url = getReferenceUrl(wolUrl, query);
 
         const anchor = createEl('a');
         anchor.className = 'inrefens-link';
@@ -252,7 +254,14 @@ function processBlockElement(block: HTMLElement): void {
         for (const c of sorted) {
             if (c.end <= c.start) continue;
             if (!c.wol_url) continue;
-            replaceRunRange(run.children, c.start, c.end, c.wol_url, c.parts?.query || '');
+            const query = c.parts?.query || '';
+            replaceRunRange(
+                run.children,
+                c.start,
+                c.end,
+                getReferenceUrl(c.wol_url, query),
+                query,
+            );
         }
 
         children = Array.from(block.childNodes);
@@ -304,13 +313,13 @@ function replaceTextNode(textNode: Text, text: string, citations: Citation[]): v
         if (citation.start > pos) {
             fragment.appendChild(activeDocument.createTextNode(text.substring(pos, citation.start)));
         }
+        const query = citation.parts?.query || '';
         const anchor = createEl('a');
         anchor.className = 'inrefens-link';
-        anchor.href = citation.wol_url;
+        anchor.href = getReferenceUrl(citation.wol_url, query);
         anchor.target = '_blank';
         anchor.rel = 'noopener noreferrer';
         anchor.textContent = citation.text;
-        const query = citation.parts?.query;
         if (query) {
             anchor.setAttribute('data-inrefens-query', query);
         }

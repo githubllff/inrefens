@@ -5,6 +5,7 @@ import { createInrefensEditorPlugin, requestInrefensFullRescan } from './editor'
 import { initEngine, isEngineReady, resetEngine, buildWolUrl } from './engine-wrapper';
 import { processElement } from './post-processor';
 import { InrefensSettingTab } from './settings';
+import { getReferenceUrl, setOpenInJWLibrary } from './linkOpener';
 import { DEFAULT_SETTINGS, InrefensSettings } from './types';
 
 export default class InrefensPlugin extends Plugin {
@@ -13,10 +14,12 @@ export default class InrefensPlugin extends Plugin {
     async loadSettings() {
         const saved = await this.loadData() as Partial<InrefensSettings> | null;
         this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
+        setOpenInJWLibrary(this.settings.openInJWLibrary);
     }
 
     async saveSettings() {
         await this.saveData(this.settings);
+        setOpenInJWLibrary(this.settings.openInJWLibrary);
     }
 
     async reloadEngine(): Promise<void> {
@@ -51,9 +54,9 @@ export default class InrefensPlugin extends Plugin {
             container.querySelectorAll('.inrefens-link[data-inrefens-query]').forEach(el => {
                 const query = el.getAttribute('data-inrefens-query');
                 if (!query) return;
-                const url = buildWolUrl(query);
-                if (url && el.instanceOf(HTMLAnchorElement)) {
-                    el.href = url;
+                const wolUrl = buildWolUrl(query);
+                if (wolUrl && el.instanceOf(HTMLAnchorElement)) {
+                    el.href = getReferenceUrl(wolUrl, query);
                 }
             });
         });
