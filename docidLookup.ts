@@ -58,7 +58,7 @@ export async function lookupDocid(query: string): Promise<string | null> {
     const cacheKey = `${pluginLanguage}:${trimmedQuery}`;
     const cached = docidCache[cacheKey];
     if (cached) {
-        console.debug('in(REF)ens: using cached docid for', trimmedQuery, cached);
+        console.warn('in(REF)ens: using cached docid for', trimmedQuery, cached);
         return cached;
     }
 
@@ -68,7 +68,7 @@ export async function lookupDocid(query: string): Promise<string | null> {
     // while the finder/share URL uses a locale code such as E.
     const searchUrl = `https://www.jw.org/${pluginLanguage}/search/?q=${encodeURIComponent(trimmedQuery)}`;
 
-    console.debug('in(REF)ens: searchUrl: ' + searchUrl);
+    console.warn('in(REF)ens: searchUrl: ' + searchUrl);
 
     try {
         const response = await requestUrl({
@@ -80,10 +80,10 @@ export async function lookupDocid(query: string): Promise<string | null> {
             },
         });
 
-        console.debug('in(REF)ens: JW.org response status:', response.status);
+        console.warn('in(REF)ens: JW.org response status:', response.status);
 
         const match = response.text.match(/[?&]docid=(\d+)/);
-        console.debug('in(REF)ens: docid match:', match ? match[1] : null);
+        console.warn('in(REF)ens: docid match:', match ? match[1] : null);
 
         if (match) {
             const docid = match[1];
@@ -100,7 +100,7 @@ export async function lookupDocid(query: string): Promise<string | null> {
             return docid;
         }
 
-        console.debug(
+        console.warn(
             'in(REF)ens: no docid found in JW.org response. First 1000 characters:\n',
             response.text.slice(0, 1000),
         );
