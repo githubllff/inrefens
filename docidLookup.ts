@@ -57,10 +57,20 @@ export async function lookupDocid(query: string): Promise<string | null> {
 
     const cacheKey = `${pluginLanguage}:${trimmedQuery}`;
     const cached = docidCache[cacheKey];
-    if (cached) return cached;
+    if (cached) {
+        console.debug('in(REF)ens: using cached docid for', trimmedQuery, cached);
+        return cached;
+    }
 
     const locale = JW_LOCALE_MAP[pluginLanguage] ?? 'E';
     const searchUrl = `https://www.jw.org/${locale}/search/?q=${encodeURIComponent(trimmedQuery)}`;
+
+    console.debug('in(REF)ens: JW.org docid lookup:', {
+        query: trimmedQuery,
+        language: pluginLanguage,
+        locale,
+        searchUrl,
+    });
 
     try {
         const response = await requestUrl({
@@ -68,7 +78,11 @@ export async function lookupDocid(query: string): Promise<string | null> {
             method: 'GET',
         });
 
+        console.debug('in(REF)ens: JW.org response status:', response.status);
+
         const match = response.text.match(/[?&]docid=(\d+)/);
+        console.debug('in(REF)ens: docid match:', match ? match[1] : null);
+
         if (match) {
             const docid = match[1];
             docidCache[cacheKey] = docid;
@@ -83,6 +97,11 @@ export async function lookupDocid(query: string): Promise<string | null> {
 
             return docid;
         }
+
+        console.debug(
+            'in(REF)ens: no docid found in JW.org response. First 1000 characters:\n',
+            response.text.slice(0, 1000),
+        );
     } catch (e) {
         console.warn('in(REF)ens: JW.org docid lookup failed:', e);
     }
