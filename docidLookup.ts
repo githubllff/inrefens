@@ -68,17 +68,16 @@ export async function lookupDocid(query: string): Promise<string | null> {
     // while the finder/share URL uses a locale code such as E.
     const searchUrl = `https://www.jw.org/${pluginLanguage}/search/?q=${encodeURIComponent(trimmedQuery)}`;
 
-    console.debug('in(REF)ens: JW.org docid lookup:', {
-        query: trimmedQuery,
-        language: pluginLanguage,
-        locale,
-        searchUrl,
-    });
+    console.debug('in(REF)ens: searchUrl: ' + searchUrl);
 
     try {
         const response = await requestUrl({
             url: searchUrl,
             method: 'GET',
+            headers: {
+                'User-Agent': 'Mozilla/5.0',
+                'Accept': 'text/html',
+            },
         });
 
         console.debug('in(REF)ens: JW.org response status:', response.status);
