@@ -63,7 +63,10 @@ export async function lookupDocid(query: string): Promise<string | null> {
     }
 
     const locale = JW_LOCALE_MAP[pluginLanguage] ?? 'E';
-    const searchUrl = `https://www.jw.org/${locale}/search/?q=${encodeURIComponent(trimmedQuery)}`;
+
+    // JW.org website search uses the language path, e.g. /en/search/,
+    // while the finder/share URL uses a locale code such as E.
+    const searchUrl = `https://www.jw.org/${pluginLanguage}/search/?q=${encodeURIComponent(trimmedQuery)}`;
 
     console.debug('in(REF)ens: JW.org docid lookup:', {
         query: trimmedQuery,
