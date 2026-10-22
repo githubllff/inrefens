@@ -38,7 +38,7 @@ __export(main_exports, {
   default: () => InrefensPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian2 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 
 // editor.ts
 var import_view = require("@codemirror/view");
@@ -424,45 +424,11 @@ var wasmModule2 = engine_exports;
 var engineInitialized = false;
 var engineInstance = null;
 var cachedLanguages = null;
-function fnv1a(text) {
-  const FNV_OFFSET = 2166136261;
-  const FNV_PRIME = 16777619;
-  let hash = FNV_OFFSET;
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, FNV_PRIME) >>> 0;
-  }
-  return hash >>> 0;
-}
-function findOccurrence(text, marker) {
-  const first = text.indexOf(marker);
-  if (first === -1) return -1;
-  return text.indexOf(marker, first + 1);
-}
-async function checkHealth(app) {
-  const adapter = app.vault.adapter;
-  const configDir = app.vault.configDir;
-  const mainJsPath = `${configDir}/plugins/inrefens/main.js`;
-  const mainJsContent = await adapter.read(mainJsPath);
-  const startMarker = ".PluginSettingTab {";
-  const hashLength = 5e3;
-  const startPos = findOccurrence(mainJsContent, startMarker);
-  if (startPos === -1) {
-    throw new Error("in(REF)ens: integrity check FAILED!");
-  }
-  const integritySection = mainJsContent.substring(startPos, startPos + hashLength);
-  const normalized = integritySection.replace(/\s+/g, "");
-  return fnv1a(normalized);
-}
 async function initEngine(app, language) {
   if (engineInitialized) return;
-  const generatedHash = await checkHealth(app);
   await wasmModule2.default({ module_or_path: engine_bg_default });
   const travertureEnabled = isPluginEnabled(app, "traverture");
   const instance = new wasmModule2.InrefensEngine(language, travertureEnabled);
-  if (!instance.verify_integrity(generatedHash)) {
-    throw new Error("in(REF)ens: integrity check FAILED!");
-  }
   engineInstance = instance;
   engineInitialized = true;
 }
@@ -534,6 +500,102 @@ function getAvailableLanguagesCached() {
     cachedLanguages = getAvailableLanguages();
   }
   return cachedLanguages;
+}
+
+// docidLookup.ts
+var import_obsidian = require("obsidian");
+var docidCache = {};
+var persistCache = null;
+var pluginLanguage = "en";
+var JW_LOCALE_MAP = {
+  en: "E",
+  es: "S",
+  fr: "F",
+  de: "D",
+  it: "I",
+  pt: "T",
+  nl: "O",
+  pl: "M",
+  ru: "X",
+  uk: "K"
+};
+function setPluginLanguage(languageCode) {
+  pluginLanguage = languageCode || "en";
+}
+function configureDocidCache(store, persist) {
+  docidCache = store;
+  persistCache = persist;
+}
+function buildJwOrgFinderUrl(docid, locale = "E", paragraph) {
+  let url = `https://www.jw.org/finder?srcid=jwlshare&wtlocale=${locale}&prefer=lang&docid=${docid}`;
+  if (paragraph !== void 0 && paragraph !== null && String(paragraph).trim() !== "") {
+    url += `&par=${paragraph}`;
+  }
+  return url;
+}
+async function lookupDocid(query) {
+  const trimmedQuery = (query || "").trim();
+  if (!trimmedQuery) return null;
+  const cacheKey = `${pluginLanguage}:${trimmedQuery}`;
+  const cached = docidCache[cacheKey];
+  if (cached) {
+    console.warn("in(REF)ens: using cached docid for", trimmedQuery, cached);
+    return cached;
+  }
+  const locale = JW_LOCALE_MAP[pluginLanguage] ?? "E";
+  const searchUrl = `https://www.jw.org/${pluginLanguage}/search/?q=${encodeURIComponent(trimmedQuery)}`;
+  console.warn("in(REF)ens: searchUrl: " + searchUrl);
+  try {
+    const response = await (0, import_obsidian.requestUrl)({
+      url: searchUrl,
+      method: "GET",
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "text/html"
+      }
+    });
+    console.warn("in(REF)ens: JW.org response status:", response.status);
+    const match = response.text.match(/[?&]docid=(\d+)/);
+    console.warn("in(REF)ens: docid match:", match ? match[1] : null);
+    if (match) {
+      const docid = match[1];
+      docidCache[cacheKey] = docid;
+      if (persistCache) {
+        try {
+          await persistCache();
+        } catch (e) {
+          console.warn("in(REF)ens: could not persist docid cache:", e);
+        }
+      }
+      return docid;
+    }
+    console.warn(
+      "in(REF)ens: no docid found in JW.org response. First 1000 characters:\n",
+      response.text.slice(0, 1e3)
+    );
+  } catch (e) {
+    console.warn("in(REF)ens: JW.org docid lookup failed:", e);
+  }
+  return null;
+}
+
+// linkOpener.ts
+var openInJWLibrary = false;
+function setOpenInJWLibrary(enabled) {
+  openInJWLibrary = enabled;
+}
+function isOpenInJWLibraryEnabled() {
+  return openInJWLibrary;
+}
+async function openReferenceAsync(wolUrl, query) {
+  if (openInJWLibrary && query.trim()) {
+    const docid = await lookupDocid(query);
+    if (docid) {
+      window.open(buildJwOrgFinderUrl(docid), "_blank");
+      return;
+    }
+  }
+  window.open(wolUrl, "_blank");
 }
 
 // editor.ts
@@ -705,11 +767,11 @@ function createInrefensEditorPlugin() {
           if (!linkEl) return;
           const query = linkEl.getAttribute("data-inrefens-query");
           if (!query) return;
-          const url = buildWolUrl(query);
-          if (!url) return;
+          const wolUrl = buildWolUrl(query);
+          if (!wolUrl) return;
           e.preventDefault();
           e.stopPropagation();
-          window.open(url, "_blank");
+          void openReferenceAsync(wolUrl, query);
         }
       }
     }
@@ -719,16 +781,28 @@ function createInrefensEditorPlugin() {
 // post-processor.ts
 function processElement(el) {
   if (isInsideAnchor(el)) return;
-  if (el.querySelector(".callout, svg")) return;
-  if (el.classList.contains("inrefens-processed")) return;
-  el.classList.add("inrefens-processed");
+  const isMarkMind = !!el.closest('.mindmap, .mm-mindmap-container, [class*="mindmap"]') || !!el.querySelector('.mindmap, .mm-mindmap-container, [class*="mindmap"]');
+  if (!isMarkMind && el.querySelector(".callout, svg")) return;
+  if (el.classList.contains("inrefens-processed") && !isMarkMind) return;
+  if (!isMarkMind) el.classList.add("inrefens-processed");
   handleDelimitedElements(el);
   processInlineRuns(el);
   processTextNodes(el);
+  if (isMarkMind) {
+    setTimeout(() => processElement(el), 50);
+  }
 }
 function isInsideAnchor(node) {
   const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
   return !!el?.closest("a");
+}
+function attachJwLibraryClickHandler(anchor, wolUrl, query) {
+  anchor.addEventListener("click", (event) => {
+    if (!isOpenInJWLibraryEnabled()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void openReferenceAsync(wolUrl, query);
+  });
 }
 function handleDelimitedElements(el) {
   const candidates = [];
@@ -741,15 +815,16 @@ function handleDelimitedElements(el) {
   for (const em of candidates) {
     const text = em.textContent || "";
     if (!text) continue;
-    const url = buildDelimitedUrl(text);
-    if (!url) continue;
+    const wolUrl = buildDelimitedUrl(text);
+    if (!wolUrl) continue;
     const query = getDelimitedQuery(text);
     const anchor = createEl("a");
     anchor.className = "inrefens-link";
-    anchor.href = url;
+    anchor.href = wolUrl;
     anchor.target = "_blank";
     anchor.rel = "noopener noreferrer";
     anchor.setAttribute("data-inrefens-query", query);
+    attachJwLibraryClickHandler(anchor, wolUrl, query);
     while (em.firstChild) {
       anchor.appendChild(em.firstChild);
     }
@@ -808,7 +883,7 @@ function flattenRun(run) {
   }
   return out;
 }
-function replaceRunRange(run, from, to, url, query) {
+function replaceRunRange(run, from, to, wolUrl, query) {
   const first = run[0];
   const parent = first.node.parentNode;
   if (!parent) return;
@@ -825,10 +900,11 @@ function replaceRunRange(run, from, to, url, query) {
   }
   const anchor = createEl("a");
   anchor.className = "inrefens-link";
-  anchor.href = url;
+  anchor.href = wolUrl;
   anchor.target = "_blank";
   anchor.rel = "noopener noreferrer";
   anchor.setAttribute("data-inrefens-query", query);
+  attachJwLibraryClickHandler(anchor, wolUrl, query);
   for (const rc of run) {
     const rcEnd = rc.start + rc.text.length;
     if (rcEnd <= from) continue;
@@ -931,7 +1007,13 @@ function processBlockElement(block) {
     for (const c of sorted) {
       if (c.end <= c.start) continue;
       if (!c.wol_url) continue;
-      replaceRunRange(run.children, c.start, c.end, c.wol_url, c.parts?.query || "");
+      replaceRunRange(
+        run.children,
+        c.start,
+        c.end,
+        c.wol_url,
+        c.parts?.query || ""
+      );
     }
     children = Array.from(block.childNodes);
     i = Math.min(i + 1, children.length);
@@ -971,16 +1053,17 @@ function replaceTextNode(textNode, text, citations) {
     if (citation.start > pos) {
       fragment.appendChild(activeDocument.createTextNode(text.substring(pos, citation.start)));
     }
+    const query = citation.parts?.query || "";
     const anchor = createEl("a");
     anchor.className = "inrefens-link";
     anchor.href = citation.wol_url;
     anchor.target = "_blank";
     anchor.rel = "noopener noreferrer";
     anchor.textContent = citation.text;
-    const query = citation.parts?.query;
     if (query) {
       anchor.setAttribute("data-inrefens-query", query);
     }
+    attachJwLibraryClickHandler(anchor, citation.wol_url, query);
     fragment.appendChild(anchor);
     pos = citation.end;
   }
@@ -991,7 +1074,7 @@ function replaceTextNode(textNode, text, citations) {
 }
 
 // settings.ts
-var import_obsidian = require("obsidian");
+var import_obsidian2 = require("obsidian");
 var LINK_COLOR_OPTIONS = [
   { value: "", label: "Theme default" },
   { value: "#4a6da7", label: "Blue" },
@@ -1001,7 +1084,7 @@ var LINK_COLOR_OPTIONS = [
   { value: "#eab308", label: "Yellow" },
   { value: "custom", label: "Custom (hex)" }
 ];
-var InrefensSettingTab = class extends import_obsidian.PluginSettingTab {
+var InrefensSettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -1059,6 +1142,19 @@ var InrefensSettingTab = class extends import_obsidian.PluginSettingTab {
               type: "dropdown",
               key: "language",
               options: langOptions
+            }
+          },
+          {
+            name: "Open references in JW Library",
+            desc: "When enabled, clicking a detected reference attempts to open it in JW Library using its finder deep link. Turn this off to open the WOL search page instead.",
+            render: (setting) => {
+              setting.addToggle((toggle) => {
+                toggle.setValue(this.plugin.settings.openInJWLibrary).onChange(async (value) => {
+                  this.plugin.settings.openInJWLibrary = value;
+                  await this.plugin.saveSettings();
+                  this.plugin.refreshReadingViewLinksForSettings();
+                });
+              });
             }
           },
           {
@@ -1147,11 +1243,13 @@ var InrefensSettingTab = class extends import_obsidian.PluginSettingTab {
 var DEFAULT_SETTINGS = {
   language: "en",
   linkColor: "",
-  autoLink: true
+  autoLink: true,
+  openInJWLibrary: false,
+  docidCache: {}
 };
 
 // main.ts
-var InrefensPlugin = class extends import_obsidian2.Plugin {
+var InrefensPlugin = class extends import_obsidian3.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
@@ -1159,9 +1257,16 @@ var InrefensPlugin = class extends import_obsidian2.Plugin {
   async loadSettings() {
     const saved = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
+    if (!this.settings.docidCache || typeof this.settings.docidCache !== "object") {
+      this.settings.docidCache = {};
+    }
+    setOpenInJWLibrary(this.settings.openInJWLibrary);
+    setPluginLanguage(this.settings.language);
+    configureDocidCache(this.settings.docidCache, () => this.saveSettings());
   }
   async saveSettings() {
     await this.saveData(this.settings);
+    setOpenInJWLibrary(this.settings.openInJWLibrary);
   }
   async reloadEngine() {
     resetEngine();
@@ -1174,11 +1279,14 @@ var InrefensPlugin = class extends import_obsidian2.Plugin {
     this.refreshReadingViewLinks();
     this.refreshEditorDecorations();
   }
+  refreshReadingViewLinksForSettings() {
+    this.refreshReadingViewLinks();
+  }
   refreshEditorDecorations() {
     requestInrefensFullRescan();
     this.app.workspace.iterateAllLeaves((leaf) => {
       const view = leaf.view;
-      if (!(view instanceof import_obsidian2.MarkdownView)) return;
+      if (!(view instanceof import_obsidian3.MarkdownView)) return;
       const editorView = view.editor.cm;
       const cmView = editorView;
       if (cmView?.dispatch) {
@@ -1193,9 +1301,9 @@ var InrefensPlugin = class extends import_obsidian2.Plugin {
       container.querySelectorAll(".inrefens-link[data-inrefens-query]").forEach((el) => {
         const query = el.getAttribute("data-inrefens-query");
         if (!query) return;
-        const url = buildWolUrl(query);
-        if (url && el.instanceOf(HTMLAnchorElement)) {
-          el.href = url;
+        const wolUrl = buildWolUrl(query);
+        if (wolUrl && el.instanceOf(HTMLAnchorElement)) {
+          el.href = wolUrl;
         }
       });
     });
@@ -1220,6 +1328,17 @@ var InrefensPlugin = class extends import_obsidian2.Plugin {
     this.addSettingTab(new InrefensSettingTab(this.app, this));
     this.registerEditorExtension(createInrefensEditorPlugin());
     this.registerMarkdownPostProcessor(processElement);
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        for (const node of Array.from(m.addedNodes)) {
+          if (node instanceof HTMLElement) {
+            processElement(node);
+          }
+        }
+      }
+    });
+    observer.observe(activeDocument.body, { childList: true, subtree: true });
+    this.register(() => observer.disconnect());
     if (!isEngineReady()) {
       console.warn("in(REF)ens: engine not ready!");
     }

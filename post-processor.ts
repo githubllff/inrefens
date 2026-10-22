@@ -6,12 +6,18 @@ import { Citation } from './types';
 
 export function processElement(el: HTMLElement): void {
     if (isInsideAnchor(el)) return;
-    if (el.querySelector('.callout, svg')) return;
-    if (el.classList.contains('inrefens-processed')) return;
-    el.classList.add('inrefens-processed');
+    const isMarkMind = !!el.closest('.mindmap, .mm-mindmap-container, [class*="mindmap"]') ||
+        !!el.querySelector('.mindmap, .mm-mindmap-container, [class*="mindmap"]');
+    if (!isMarkMind && el.querySelector('.callout, svg')) return;
+    if (el.classList.contains('inrefens-processed') && !isMarkMind) return;
+    if (!isMarkMind) el.classList.add('inrefens-processed');
     handleDelimitedElements(el);
     processInlineRuns(el);
     processTextNodes(el);
+
+    if (isMarkMind) {
+        setTimeout(() => processElement(el), 50);
+    }
 }
 
 function isInsideAnchor(node: Node): boolean {

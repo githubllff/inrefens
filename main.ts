@@ -98,6 +98,18 @@ export default class InrefensPlugin extends Plugin {
         this.registerEditorExtension(createInrefensEditorPlugin());
         this.registerMarkdownPostProcessor(processElement);
 
+        const observer = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                for (const node of Array.from(m.addedNodes)) {
+                    if (node instanceof HTMLElement) {
+                        processElement(node);
+                    }
+                }
+            }
+        });
+        observer.observe(activeDocument.body, { childList: true, subtree: true });
+        this.register(() => observer.disconnect());
+
         if (!isEngineReady()) {
             console.warn('in(REF)ens: engine not ready!');
         }
