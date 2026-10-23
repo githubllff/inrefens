@@ -98,6 +98,15 @@ export default class InrefensPlugin extends Plugin {
         this.registerEditorExtension(createInrefensEditorPlugin());
         this.registerMarkdownPostProcessor(processElement);
 
+        setTimeout(() => {
+            this.app.workspace.iterateAllLeaves(leaf => {
+                const container = leaf.view?.containerEl;
+                if (!container) return;
+                container.querySelectorAll('.inrefens-processed').forEach(el => el.classList.remove('inrefens-processed'));
+                try { processElement(container); } catch {}
+            });
+        }, 250);
+
         const observer = new MutationObserver((mutations) => {
             for (const m of mutations) {
                 for (const node of Array.from(m.addedNodes)) {
