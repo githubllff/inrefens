@@ -7,28 +7,50 @@ import * as wasmModuleUntyped from './engine.js';
 import wasmBinary from './engine_bg.wasm';
 import { Citation, InrefensEngineInstance, InrefensEngineModule, LanguageInfo } from './types';
 
+const WASM_START = '/*WASM-START*/';
+const WASM_END = '/*WASM-END*/';
+const H_START = 2166136261;
+const H_END = 16777619;
+
 const wasmModule = wasmModuleUntyped as unknown as InrefensEngineModule;
 
 let engineInitialized = false;
 let engineInstance: InrefensEngineInstance | null = null;
 let cachedLanguages: LanguageInfo[] | null = null;
-
-// ──────────────────────────────────────────────
-// Initialization
-// ──────────────────────────────────────────────
-// NOTE: This fork disables the upstream integrity check. The original
-// engine verifies a hash derived from the unmodified upstream main.js,
-// which prevents any modified fork from initialising.
+let engineId = 0;
 
 export async function initEngine(app: App, language: string): Promise<void> {
     if (engineInitialized) return;
 
+    const configDir = app.vault.configDir;
+    let mainJsText = '';
+    try {
+        mainJsText = await app.vault.adapter.read(`${configDir}/plugins/inrefens/inrefens-main.js`);
+    } catch (e) {
+        try {
+            mainJsText = await app.vault.adapter.read(`${configDir}/plugins/inrefens/main.js`);
+        } catch {}
+    }
+
+    if (mainJsText) {
+        const wsIdx = mainJsText.indexOf(WASM_START);
+        const weIdx = wsIdx !== -1 ? mainJsText.indexOf(WASM_END, wsIdx) : -1;
+        const stripped = wsIdx !== -1 && weIdx !== -1
+            ? mainJsText.slice(0, wsIdx) + mainJsText.slice(weIdx + WASM_END.length)
+            : mainJsText;
+        const bytes = new TextEncoder().encode(stripped);
+        let h = H_START;
+        for (let i = 0; i < bytes.length; i++) {
+            h ^= bytes[i];
+            h = Math.imul(h, H_END) >>> 0;
+        }
+        engineId = h >>> 0;
+    }
+
     await wasmModule.default({ module_or_path: wasmBinary });
 
     const travertureEnabled = isPluginEnabled(app, 'traverture');
-    const instance = new wasmModule.InrefensEngine(language, travertureEnabled);
-
-    engineInstance = instance;
+    engineInstance = new wasmModule.InrefensEngine(language, travertureEnabled, engineId);
     engineInitialized = true;
 }
 
@@ -48,10 +70,6 @@ export function resetEngine(): void {
     engineInitialized = false;
     cachedLanguages = null;
 }
-
-// ──────────────────────────────────────────────
-// Engine access
-// ──────────────────────────────────────────────
 
 export function findCitations(text: string): Citation[] | null {
     if (!engineInstance) return null;
@@ -116,3 +134,4 @@ export function getAvailableLanguagesCached(): LanguageInfo[] {
     }
     return cachedLanguages;
 }
+EOF
