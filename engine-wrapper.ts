@@ -134,4 +134,3 @@ export function getAvailableLanguagesCached(): LanguageInfo[] {
     }
     return cachedLanguages;
 }
-EOF

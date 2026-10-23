@@ -527,7 +527,6 @@ function getAvailableLanguagesCached() {
   }
   return cachedLanguages;
 }
-EOF;
 
 // docidLookup.ts
 var import_obsidian = require("obsidian");
