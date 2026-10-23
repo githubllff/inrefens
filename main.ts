@@ -109,6 +109,11 @@ export default class InrefensPlugin extends Plugin {
 
         const observer = new MutationObserver((mutations) => {
             for (const m of mutations) {
+                if (m.type === 'characterData') {
+                    const parent = m.target.parentElement;
+                    if (parent) processElement(parent);
+                    continue;
+                }
                 for (const node of Array.from(m.addedNodes)) {
                     if (node instanceof HTMLElement) {
                         processElement(node);
@@ -116,7 +121,7 @@ export default class InrefensPlugin extends Plugin {
                 }
             }
         });
-        observer.observe(activeDocument.body, { childList: true, subtree: true });
+        observer.observe(activeDocument.body, { childList: true, subtree: true, characterData: true });
         this.register(() => observer.disconnect());
 
         if (!isEngineReady()) {

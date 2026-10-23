@@ -9,6 +9,7 @@ export function processElement(el: HTMLElement): void {
     const isMarkMind = !!el.closest('.mindmap, .mm-mindmap-container, [class*="mindmap"]') ||
         !!el.querySelector('.mindmap, .mm-mindmap-container, [class*="mindmap"]');
     if (!isMarkMind && el.querySelector('.callout, svg')) return;
+    if (isMarkMind) el.classList.remove('inrefens-processed');
     if (el.classList.contains('inrefens-processed') && !isMarkMind) return;
     if (!isMarkMind) el.classList.add('inrefens-processed');
     handleDelimitedElements(el);

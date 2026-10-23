@@ -783,6 +783,7 @@ function processElement(el) {
   if (isInsideAnchor(el)) return;
   const isMarkMind = !!el.closest('.mindmap, .mm-mindmap-container, [class*="mindmap"]') || !!el.querySelector('.mindmap, .mm-mindmap-container, [class*="mindmap"]');
   if (!isMarkMind && el.querySelector(".callout, svg")) return;
+  if (isMarkMind) el.classList.remove("inrefens-processed");
   if (el.classList.contains("inrefens-processed") && !isMarkMind) return;
   if (!isMarkMind) el.classList.add("inrefens-processed");
   handleDelimitedElements(el);
@@ -1341,6 +1342,11 @@ var InrefensPlugin = class extends import_obsidian3.Plugin {
     }, 250);
     const observer = new MutationObserver((mutations) => {
       for (const m of mutations) {
+        if (m.type === "characterData") {
+          const parent = m.target.parentElement;
+          if (parent) processElement(parent);
+          continue;
+        }
         for (const node of Array.from(m.addedNodes)) {
           if (node instanceof HTMLElement) {
             processElement(node);
@@ -1348,7 +1354,7 @@ var InrefensPlugin = class extends import_obsidian3.Plugin {
         }
       }
     });
-    observer.observe(activeDocument.body, { childList: true, subtree: true });
+    observer.observe(activeDocument.body, { childList: true, subtree: true, characterData: true });
     this.register(() => observer.disconnect());
     if (!isEngineReady()) {
       console.warn("in(REF)ens: engine not ready!");
