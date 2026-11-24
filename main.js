@@ -496,7 +496,7 @@ function getDelimitedQuery(text) {
     return "";
   }
 }
-function buildWolUrl(query) {
+function buildWolUrl2(query) {
   if (!engineInstance) return "";
   try {
     return engineInstance.build_wol_url_for_query(query);
@@ -526,6 +526,131 @@ function getAvailableLanguagesCached() {
     cachedLanguages = getAvailableLanguages();
   }
   return cachedLanguages;
+}
+
+// citations.ts
+function detectCitations(original) {
+  const cleanChars = [];
+  const cleanToOrig = [];
+  const pushChar = (idx) => {
+    const ch = original[idx];
+    if (ch === "_" || ch === "*") return;
+    if (ch === "\u200B" || ch === "\u200C" || ch === "\u200D" || ch === "\uFEFF") return;
+    if (ch === "\xA0") {
+      cleanChars.push(" ");
+      cleanToOrig.push(idx);
+      return;
+    }
+    if (ch === "\u2011") {
+      cleanChars.push("-");
+      cleanToOrig.push(idx);
+      return;
+    }
+    cleanChars.push(ch);
+    cleanToOrig.push(idx);
+  };
+  let ci = 0;
+  while (ci < original.length) {
+    if (original[ci] === "[") {
+      const close = original.indexOf("]", ci);
+      if (close !== -1 && original[close + 1] === "(") {
+        const end = original.indexOf(")", close + 2);
+        if (end !== -1) {
+          for (let k = ci + 1; k < close; k++) pushChar(k);
+          ci = end + 1;
+          continue;
+        }
+      }
+    }
+    pushChar(ci);
+    ci++;
+  }
+  const cleanText = cleanChars.join("");
+  const items = [];
+  const seen = /* @__PURE__ */ new Set();
+  const pubCits = findCitations(cleanText);
+  if (pubCits) {
+    for (const cit of pubCits) {
+      if (cit.parts && cit.parts.title) continue;
+      const origStart = cleanToOrig[cit.start];
+      const origEnd = cleanToOrig[cit.end - 1] + 1;
+      const key = `${origStart}-${origEnd}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({
+        text: cit.text.replace(/[_*]/g, ""),
+        start: origStart,
+        end: origEnd,
+        family: cit.family,
+        root: cit.root,
+        parts: cit.parts,
+        wol_url: cit.wol_url
+      });
+    }
+  }
+  const titleRefRe = new RegExp(`\\bit(-[12])?\\s+[""\u201C\u201D\xAB\xBB]?([A-Za-z][A-Za-z\\s'-]+?)[""\u201C\u201D\xAB\xBB]?(\\s+No\\.\\s*\\d+)?\\s*(?:[^\\w\\s]+|par\\.?|p\\.?)\\s*(\\d+(?:\\s*[-\u2013]\\s*\\d+)?)`, "g");
+  let m;
+  while ((m = titleRefRe.exec(cleanText)) !== null) {
+    const volSpec = m[1] || null;
+    const title = m[2].trim();
+    const noPart = m[3] ? m[3].trim() : "";
+    const para = m[4];
+    const firstLetter = title.charAt(0).toUpperCase();
+    const vol = volSpec || (firstLetter >= "A" && firstLetter <= "I" ? "-1" : "-2");
+    const cleanStart = m.index;
+    const cleanEnd = m.index + m[0].length;
+    const origStart = cleanToOrig[cleanStart];
+    const origEnd = cleanToOrig[cleanEnd - 1] + 1;
+    const key = `${origStart}-${origEnd}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const query = noPart ? `it${vol} "${title}" ${noPart} \xB6${para}` : `it${vol} "${title}" \xB6${para}`;
+    const url = buildWolUrl2(query);
+    const parts = {
+      root: `it${vol}`,
+      query,
+      title,
+      volume: parseInt(vol.replace("-", ""), 10)
+    };
+    items.push({
+      text: cleanText.slice(cleanStart, cleanEnd).replace(/[_*]/g, "").trim(),
+      start: origStart,
+      end: origEnd,
+      family: "insight",
+      root: `it${vol}`,
+      parts,
+      wol_url: url
+    });
+  }
+  const ijwArticleRe = /\b(ijw[a-z]{2,4})\s+(?:article\s+)?(\d+)/gi;
+  while ((m = ijwArticleRe.exec(cleanText)) !== null) {
+    const pubCode = m[1];
+    const num = m[2];
+    const cleanStart = m.index;
+    const cleanEnd = m.index + m[0].length;
+    const origStart = cleanToOrig[cleanStart];
+    const origEnd = cleanToOrig[cleanEnd - 1] + 1;
+    const key = `${origStart}-${origEnd}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const query = `${pubCode} ${num}`;
+    const url = buildWolUrl2(query);
+    const parts = {
+      root: pubCode,
+      query
+    };
+    items.push({
+      text: cleanText.slice(cleanStart, cleanEnd).replace(/[_*]/g, "").trim(),
+      start: origStart,
+      end: origEnd,
+      family: "periodicals",
+      root: pubCode,
+      parts,
+      wol_url: url
+    });
+  }
+  items.sort((a, b) => a.start - b.start);
+  return items;
 }
 
 // docidLookup.ts
@@ -639,7 +764,7 @@ function decorationsForRange(view, from, to, out) {
   if (to <= from) return;
   const text = view.state.doc.sliceString(from, to);
   if (!text) return;
-  const citations = findCitations(text);
+  const citations = detectCitations(text);
   if (!citations || citations.length === 0) return;
   for (const citation of citations) {
     const docFrom = from + citation.start;
@@ -1025,7 +1150,7 @@ function processBlockElement(block) {
       i = run.endIndex + 1;
       continue;
     }
-    const citations = findCitations(flat);
+    const citations = detectCitations(flat);
     if (!citations || citations.length === 0) {
       i = run.endIndex + 1;
       continue;
@@ -1067,7 +1192,7 @@ function processTextNodes(el) {
   for (const textNode of textNodes) {
     const text = textNode.nodeValue || "";
     if (!text) continue;
-    const citations = findCitations(text);
+    const citations = detectCitations(text);
     if (!citations || citations.length === 0) continue;
     replaceTextNode(textNode, text, citations);
   }
@@ -1328,7 +1453,7 @@ var InrefensPlugin = class extends import_obsidian3.Plugin {
       container.querySelectorAll(".inrefens-link[data-inrefens-query]").forEach((el) => {
         const query = el.getAttribute("data-inrefens-query");
         if (!query) return;
-        const wolUrl = buildWolUrl(query);
+        const wolUrl = buildWolUrl2(query);
         if (wolUrl && el.instanceOf(HTMLAnchorElement)) {
           el.href = wolUrl;
         }

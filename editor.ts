@@ -2,7 +2,7 @@
 
 import { ViewPlugin, EditorView, Decoration, DecorationSet, ViewUpdate } from '@codemirror/view';
 import { RangeSetBuilder } from '@codemirror/state';
-import { findCitations, buildWolUrl } from './engine-wrapper';
+import { detectCitations } from './citations';
 import { openReferenceAsync } from './linkOpener';
 
 const SMALL_CHANGE_MAX_CHARS = 64;
@@ -34,7 +34,7 @@ function decorationsForRange(
     const text = view.state.doc.sliceString(from, to);
     if (!text) return;
 
-    const citations = findCitations(text);
+    const citations = detectCitations(text);
     if (!citations || citations.length === 0) return;
 
     for (const citation of citations) {

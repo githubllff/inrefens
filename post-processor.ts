@@ -1,6 +1,7 @@
 // post-processor.ts
 
-import { findCitations, buildDelimitedUrl, getDelimitedQuery } from './engine-wrapper';
+import { buildDelimitedUrl, getDelimitedQuery } from './engine-wrapper';
+import { detectCitations } from './citations';
 import { openReferenceAsync } from './linkOpener';
 import { Citation } from './types';
 
@@ -277,7 +278,7 @@ function processBlockElement(block: HTMLElement): void {
         const flat = flattenRun(run.children);
         if (!flat.trim()) { i = run.endIndex + 1; continue; }
 
-        const citations = findCitations(flat);
+        const citations = detectCitations(flat);
         if (!citations || citations.length === 0) { i = run.endIndex + 1; continue; }
 
         const sorted = [...citations].sort((a, b) => b.start - a.start);
@@ -326,7 +327,7 @@ function processTextNodes(el: HTMLElement): void {
         const text = textNode.nodeValue || '';
         if (!text) continue;
 
-        const citations = findCitations(text);
+        const citations = detectCitations(text);
         if (!citations || citations.length === 0) continue;
 
         replaceTextNode(textNode, text, citations);
